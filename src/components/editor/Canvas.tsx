@@ -130,7 +130,55 @@ export function Canvas() {
     updateCanvasSize();
     window.addEventListener('resize', updateCanvasSize);
     return () => window.removeEventListener('resize', updateCanvasSize);
-  }, [canvasStore, canvasStore.sizeMode, canvasStore.zoom, root]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasStore.setCanvasSize, canvasStore.sizeMode, canvasStore.zoom]);
+
+  const SNAP_THRESHOLD = 2;
+
+  const calculateSnapPosition = (
+    componentId: string,
+    newX: number,
+    newY: number
+  ): { x: number; y: number } => {
+    const component = componentStore.getComponent(componentId);
+    const parent = componentStore.getParent(componentId);
+
+    if (!component || !parent) {
+      return { x: newX, y: newY };
+    }
+
+    const parentLayout = layoutEngine.getLayout(parent.id);
+    const childLayout = layoutEngine.getLayout(componentId);
+
+    if (!parentLayout || !childLayout) {
+      return { x: newX, y: newY };
+    }
+
+    const childWidth = childLayout.width;
+    const childHeight = childLayout.height;
+
+    let snappedX = newX;
+    let snappedY = newY;
+
+    const snapToParentLeft = parentLayout.x;
+    const snapToParentRight = parentLayout.x + parentLayout.width - childWidth;
+    const snapToParentTop = parentLayout.y;
+    const snapToParentBottom = parentLayout.y + parentLayout.height - childHeight;
+
+    if (Math.abs(newX - snapToParentLeft) <= SNAP_THRESHOLD) {
+      snappedX = snapToParentLeft;
+    } else if (Math.abs(newX - snapToParentRight) <= SNAP_THRESHOLD) {
+      snappedX = snapToParentRight;
+    }
+
+    if (Math.abs(newY - snapToParentTop) <= SNAP_THRESHOLD) {
+      snappedY = snapToParentTop;
+    } else if (Math.abs(newY - snapToParentBottom) <= SNAP_THRESHOLD) {
+      snappedY = snapToParentBottom;
+    }
+
+    return { x: snappedX, y: snappedY };
+  };
 
   // Keyboard navigation for selected components
   useEffect(() => {
@@ -174,13 +222,38 @@ export function Canvas() {
             break;
         }
 
+        // Apply snap to parent edges
+        const parent = componentStore.getParent(id);
+        if (parent) {
+          const parentLayout = layoutEngine.getLayout(parent.id);
+          const childLayout = layoutEngine.getLayout(id);
+          if (parentLayout && childLayout) {
+            const snapToLeft = parentLayout.x;
+            const snapToRight = parentLayout.x + parentLayout.width - childLayout.width;
+            const snapToTop = parentLayout.y;
+            const snapToBottom = parentLayout.y + parentLayout.height - childLayout.height;
+
+            if (Math.abs(newX - snapToLeft) <= SNAP_THRESHOLD) newX = snapToLeft;
+            else if (Math.abs(newX - snapToRight) <= SNAP_THRESHOLD) newX = snapToRight;
+
+            if (Math.abs(newY - snapToTop) <= SNAP_THRESHOLD) newY = snapToTop;
+            else if (Math.abs(newY - snapToBottom) <= SNAP_THRESHOLD) newY = snapToBottom;
+          }
+        }
+
         componentStore.updateLayout(id, { x: newX, y: newY });
       });
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [componentStore, selectionStore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    componentStore.getComponent,
+    componentStore.getParent,
+    componentStore.updateLayout,
+    selectionStore.selectedIds,
+  ]);
 
   const cellWidth = 8; // pixels per character
   const cellHeight = 16; // pixels per line
@@ -224,8 +297,11 @@ export function Canvas() {
       const charX = Math.floor(mouseX / (cellWidth * canvasStore.zoom));
       const charY = Math.floor(mouseY / (cellHeight * canvasStore.zoom));
 
-      // Update component position
-      componentStore.updateLayout(dragData.componentId, { x: charX, y: charY });
+      // Apply snap to parent edges
+      const snappedPos = calculateSnapPosition(dragData.componentId, charX, charY);
+
+      // Update component position with snap
+      componentStore.updateLayout(dragData.componentId, { x: snappedPos.x, y: snappedPos.y });
       dragStore.endDrag();
       return;
     }

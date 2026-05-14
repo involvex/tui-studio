@@ -9,7 +9,6 @@
 A Figma-like visual editor for designing Terminal UI applications. Drag-and-drop components onto a live canvas, edit properties visually, and export to multiple TUI frameworks.
 <img width="400" height="400" alt="Computer" src="https://github.com/user-attachments/assets/89fc6a4f-7034-49e3-9729-5355c276842f" />
 
-
 ## Features
 
 - **Visual Canvas** — Drag-and-drop components with live ANSI preview at configurable zoom levels
